@@ -177,6 +177,11 @@ agenticulture/
 │
 ├── eval_results/             ← Pre-computed results (full runs + ablations)
 │
+├── papers/                   ← Solution papers (LaTeX source + references)
+│   ├── track_a_paper.tex
+│   ├── track_b_paper.tex
+│   └── references.bib
+│
 ├── Makefile                  ← Common commands
 ├── docker-compose.yml        ← Starts both services with one command
 └── .env.example              ← Copy to .env and fill in your API key
@@ -264,7 +269,7 @@ This uses the AgentSociety Challenge evaluation framework — the same metrics a
 |---|-------------|----------|--------|
 | 1 | Task A containerised API | `task_a/` | Ready |
 | 2 | Task B containerised API | `task_b/` | Ready |
-| 3 | Solution papers (Track A + B) | `track_a_paper.tex`, `track_b_paper.tex` | Ready |
+| 3 | Solution papers (Track A + B) | `papers/track_a_paper.tex`, `papers/track_b_paper.tex` | Ready |
 | 4 | Code repository | This repo | Ready |
 
 ---
