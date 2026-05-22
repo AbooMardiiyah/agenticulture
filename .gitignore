@@ -1,0 +1,50 @@
+# Environment & secrets
+.env
+
+# Processed datasets (large, reproduced by stream_data.py)
+data/
+
+# Logs
+*.log
+nohup.out
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Type checking & coverage
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Evaluation results (generated output, not source)
+results_task_a_*.json
+results_task_b_*.json
+
+# Raw dataset downloads (large, not needed in repo)
+*.zip
+*.tar
+*.tar.gz
+*.jsonl.gz
+
+# Internal working docs (not for submission)
+BEGINNER_GUIDE.md
+NIGERIAN_CONTEXT_STRATEGY.md
+CLAUDE.md
+AGENTS.md
+BCT*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

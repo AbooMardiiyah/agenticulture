@@ -1,0 +1,51 @@
+version: '3.8'
+
+# Build context is the repo ROOT for both services so Docker can access core/.
+# Each Dockerfile then copies core/ + its own task_x/ folder into the container.
+
+services:
+  task-a:
+    build:
+      context: .
+      dockerfile: task_a/Dockerfile
+    container_name: agenticulture-task-a
+    ports:
+      - "8001:8001"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.together.xyz/v1}
+      - LLM_MODEL=${LLM_MODEL:-meta-llama/Llama-3.3-70B-Instruct-Turbo}
+      - DATA_DIR=/app/data
+      - PORT=8001
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  task-b:
+    build:
+      context: .
+      dockerfile: task_b/Dockerfile
+    container_name: agenticulture-task-b
+    ports:
+      - "8002:8002"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://api.together.xyz/v1}
+      - LLM_MODEL=${LLM_MODEL:-meta-llama/Llama-3.3-70B-Instruct-Turbo}
+      - DATA_DIR=/app/data
+      - PORT=8002
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

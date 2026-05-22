@@ -1,0 +1,51 @@
+# Keeps the Docker build context small.
+# Both task_a and task_b Dockerfiles use the repo root as context.
+
+# Large data — mounted at runtime via docker-compose volume
+data/
+
+# Raw dataset downloads
+*.zip
+*.tar
+*.tar.gz
+*.jsonl.gz
+
+# Evaluation framework (not needed inside containers)
+evaluation/
+
+# Logs & results
+*.log
+nohup.out
+results_task_*.json
+stream.log
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets
+.env
+
+# Eval runner scripts (not needed inside containers)
+eval_task_a.py
+eval_task_b.py
+stream_data.py
+
+# Docs & misc
+*.md
+SOLUTION_PAPER.md
+BEGINNER_GUIDE.md
+NIGERIAN_CONTEXT_STRATEGY.md
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
