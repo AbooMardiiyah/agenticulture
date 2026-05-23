@@ -212,20 +212,73 @@ agenticulture/
 
 ## Local evaluation
 
-### Run a fresh evaluation
+### Dataset setup
 
-The dataset must be placed at `data/eval/` (containing `user.json`, `item.json`, `review.json`).
+The evaluation scripts need the  dataset placed at `data/eval/`. The folder must contain three files:
+
+```
+data/eval/
+├── user.json      ← user profiles
+├── item.json      ← item metadata
+└── review.json    ← review history
+```
+These files are sourced from the DSN × BCT LLM Agent Challenge 3.0 dataset. Process the raw dataset using `stream_data.py` and place the output here before running evaluations.
+
+---
+
+### Flags reference
+
+| Flag | Values | Description |
+|------|--------|-------------|
+| `--platform` | `yelp`, `amazon`, `goodreads`, `all` | Which platform to evaluate. Use `all` to run all three in sequence. |
+| `--tasks` | any integer | Number of tasks to run per platform. Each task = one LLM API call. |
+| `--data_dir` | path | Path to folder containing `user.json`, `item.json`, `review.json`. |
+| `--workers` | integer | Parallel workers. Keep at `1` to avoid rate-limiting. |
+| `--ablation` | see below | Run a specific ablation variant instead of the full system. |
+
+---
+
+### Quick smoke-test (2 tasks, ~2 min)
+
+Load your `.env` first, then run:
 
 ```bash
-# Task A — all platforms, 50 tasks each (~1 hour, uses API credits)
 set -a && source .env && set +a
+
+# Task A — 2 tasks on Yelp
+uv run python eval_task_a.py --platform yelp --tasks 2 --data_dir ./data/eval --workers 1
+
+# Task B — 2 tasks on Yelp
+uv run python eval_task_b.py --platform yelp --tasks 2 --data_dir ./data/eval --workers 1
+```
+
+To test a different platform, replace `yelp` with `amazon` or `goodreads`:
+```bash
+uv run python eval_task_a.py --platform amazon --tasks 2 --data_dir ./data/eval --workers 1
+```
+
+To run all three platforms at once (3 × 2 tasks):
+```bash
+uv run python eval_task_a.py --platform all --tasks 2 --data_dir ./data/eval --workers 1
+```
+
+Results are printed to the terminal and saved to `eval_results/` automatically, e.g.:
+- `eval_results/results_task_a_yelp.json`
+- `eval_results/results_task_b_yelp.json`
+
+---
+
+### Full evaluation run (~1 hour per task, uses API credits)
+
+```bash
+# Task A — all platforms, 50 tasks each
 uv run python eval_task_a.py --platform all --tasks 50 --data_dir ./data/eval --workers 1
 
 # Task B — all platforms, 50 tasks each
 uv run python eval_task_b.py --platform all --tasks 50 --data_dir ./data/eval --workers 1
 ```
 
-Or use the Makefile shortcuts (5 tasks, quick smoke-test):
+Or use the Makefile shortcuts (5 tasks per platform):
 ```bash
 make eval-a
 make eval-b
@@ -281,7 +334,7 @@ This uses the AgentSociety Challenge evaluation framework — the same metrics a
 | `LLM_API_KEY` | Yes | — | Together AI / OpenAI / any compatible provider key |
 | `LLM_BASE_URL` | No | OpenAI | Set to `https://api.together.xyz/v1` for Together AI |
 | `LLM_MODEL` | No | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Any chat model from your provider |
-| `DATA_DIR` | No | — | Path to dataset folder containing `user.json`, `item.json`, `review.json`. Use `./data/eval` for the AgentSociety eval subset. |
+| `DATA_DIR` | No | — | Path to dataset folder containing `user.json`, `item.json`, `review.json`. Defaults to `./data/eval` (the DSN × BCT dataset). |
 | `ENABLE_NIGERIAN_CONTEXT` | No | `true` | Toggle Nigerian cultural adaptation |
 
 ---

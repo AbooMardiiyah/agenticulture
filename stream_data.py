@@ -13,9 +13,9 @@ Disk usage:
 
 Usage:
   pip install requests tqdm
-  python stream_data.py --output_dir ./data
-  python stream_data.py --output_dir ./data --skip goodreads
-  python stream_data.py --output_dir ./data --only amazon
+  python stream_data.py --output_dir ./data/eval
+  python stream_data.py --output_dir ./data/eval --skip goodreads
+  python stream_data.py --output_dir ./data/eval --only amazon
 """
 
 import argparse
@@ -38,9 +38,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Source URLs
-# ---------------------------------------------------------------------------
 
 YELP_ZIP_URL = "https://business.yelp.com/external-assets/files/Yelp-JSON.zip"
 YELP_LOCAL_ZIP = os.path.join(os.path.dirname(__file__), "Yelp-JSON.zip")
@@ -106,9 +103,6 @@ GOODREADS_BOOK_URLS = {
     ),
 }
 
-# ---------------------------------------------------------------------------
-# Streaming helpers
-# ---------------------------------------------------------------------------
 
 def _stream_gz_lines(url: str, desc: str = "") -> Iterator[dict]:
     """
@@ -120,7 +114,7 @@ def _stream_gz_lines(url: str, desc: str = "") -> Iterator[dict]:
     """
     with requests.get(url, stream=True, timeout=(15, 600)) as r:
         r.raise_for_status()
-        r.raw.decode_content = False          # we handle gzip ourselves
+        r.raw.decode_content = False        
         with gzip.open(r.raw, "rt", encoding="utf-8", errors="replace") as gz:
             for line in tqdm(gz, desc=desc or url.split("/")[-1], unit=" lines", leave=False):
                 line = line.strip()
@@ -144,15 +138,12 @@ def _download_to_temp(url: str, desc: str) -> str:
             r.raise_for_status()
             total = int(r.headers.get("content-length", 0))
             with tqdm(total=total, unit="B", unit_scale=True, desc=desc) as bar:
-                for chunk in r.iter_content(chunk_size=1 << 20):  # 1 MB chunks
+                for chunk in r.iter_content(chunk_size=1 << 20): 
                     tmp.write(chunk)
                     bar.update(len(chunk))
     return path
 
 
-# ---------------------------------------------------------------------------
-# Yelp  (three-pass over a temp ZIP — ZIP central directory requires seek)
-# ---------------------------------------------------------------------------
 
 def process_yelp(out_items, out_reviews, out_users) -> None:
     logger.info("━━━  YELP  ━━━")
@@ -167,8 +158,6 @@ def process_yelp(out_items, out_reviews, out_users) -> None:
         delete_after = True
 
     try:
-        # The Yelp ZIP contains a folder with a TAR inside it.
-        # Extract just the TAR to a temp file, then process from there.
         import tarfile
 
         with zipfile.ZipFile(tmp_path, "r") as zf:
@@ -195,7 +184,6 @@ def process_yelp(out_items, out_reviews, out_users) -> None:
             members = [m.name for m in tf.getmembers()]
             logger.info(f"TAR contents: {members}")
 
-            # Pass 1 — businesses → keep only target cities
             logger.info("Pass 1/3  filtering businesses for target cities…")
             biz_ids: Set[str] = set()
             with tarfile.open(tar_tmp, "r") as tf:
@@ -217,7 +205,6 @@ def process_yelp(out_items, out_reviews, out_users) -> None:
 
             logger.info(f"  → {len(biz_ids):,} businesses kept")
 
-            # Pass 2 — reviews → keep only reviews for kept businesses
             logger.info("Pass 2/3  filtering reviews…")
             user_ids: Set[str] = set()
             with tarfile.open(tar_tmp, "r") as tf:
@@ -239,7 +226,6 @@ def process_yelp(out_items, out_reviews, out_users) -> None:
 
             logger.info(f"  → {len(user_ids):,} unique users in filtered reviews")
 
-            # Pass 3 — users → keep only users who wrote kept reviews
             logger.info("Pass 3/3  filtering users…")
             kept = 0
             with tarfile.open(tar_tmp, "r") as tf:
@@ -268,14 +254,9 @@ def process_yelp(out_items, out_reviews, out_users) -> None:
             logger.info("Yelp temp ZIP deleted.")
 
 
-# ---------------------------------------------------------------------------
-# Amazon  (true streaming — no temp files)
-# ---------------------------------------------------------------------------
-
 def process_amazon(out_items, out_reviews, out_users) -> None:
     logger.info("━━━  AMAZON  ━━━")
 
-    # Pass 1 — stream all review files → collect valid item/user IDs, write reviews
     logger.info("Pass 1/2  streaming reviews (collecting item + user IDs)…")
     valid_items: Set[str] = set()
     valid_users: Set[str] = set()
@@ -310,11 +291,9 @@ def process_amazon(out_items, out_reviews, out_users) -> None:
 
     logger.info(f"  Total unique items: {len(valid_items):,}  |  users: {len(valid_users):,}")
 
-    # Write user stubs (Amazon has no separate user profile file)
     for uid in valid_users:
         out_users.write(json.dumps({"user_id": uid, "source": "amazon"}) + "\n")
 
-    # Pass 2 — stream metadata → keep only items seen in reviews
     logger.info("Pass 2/2  streaming item metadata…")
     for category, url in AMAZON_META_URLS.items():
         logger.info(f"  {category}")
@@ -329,14 +308,10 @@ def process_amazon(out_items, out_reviews, out_users) -> None:
         logger.info(f"    → {count:,} items")
 
 
-# ---------------------------------------------------------------------------
-# Goodreads  (true streaming — no temp files)
-# ---------------------------------------------------------------------------
 
 def process_goodreads(out_items, out_reviews, out_users) -> None:
     logger.info("━━━  GOODREADS  ━━━")
 
-    # Pass 1 — stream review files → collect book/user IDs, write reviews
     logger.info("Pass 1/2  streaming reviews (collecting book + user IDs)…")
     valid_books: Set[str] = set()
     valid_users: Set[str] = set()
@@ -367,11 +342,8 @@ def process_goodreads(out_items, out_reviews, out_users) -> None:
 
     logger.info(f"  Total unique books: {len(valid_books):,}  |  users: {len(valid_users):,}")
 
-    # Write user stubs
     for uid in valid_users:
         out_users.write(json.dumps({"user_id": uid, "source": "goodreads"}) + "\n")
-
-    # Pass 2 — stream book files → keep only books seen in reviews
     logger.info("Pass 2/2  streaming book metadata…")
     for genre, url in GOODREADS_BOOK_URLS.items():
         logger.info(f"  {genre}")
@@ -386,9 +358,6 @@ def process_goodreads(out_items, out_reviews, out_users) -> None:
         logger.info(f"    → {count:,} books")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 SOURCES = ("yelp", "amazon", "goodreads")
 PROCESSORS = {
@@ -404,8 +373,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--output_dir", default="./data",
-                        help="Directory to write item.json, review.json, user.json (default: ./data)")
+    parser.add_argument("--output_dir", default="./data/eval",
+                        help="Directory to write item.json, review.json, user.json (default: ./data/eval)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--skip", nargs="+", choices=SOURCES, metavar="SOURCE",
                        help="Skip one or more sources, e.g. --skip goodreads")
@@ -424,9 +393,6 @@ def main() -> None:
     review_path = os.path.join(args.output_dir, "review.json")
     user_path   = os.path.join(args.output_dir, "user.json")
 
-    # First source in the run opens in write mode; subsequent ones append.
-    # If any output file already exists (from a previous partial run),
-    # always append so existing data is not overwritten.
     files_exist = any(os.path.exists(p) for p in (item_path, review_path, user_path))
     mode = "a" if files_exist else "w"
     if files_exist:
@@ -442,7 +408,7 @@ def main() -> None:
             open(user_path,   mode, encoding="utf-8") as out_users,
         ):
             PROCESSORS[source](out_items, out_reviews, out_users)
-        mode = "a"   # subsequent sources always append
+        mode = "a"  
 
     logger.info("\nOutput files:")
     for path in (item_path, review_path, user_path):

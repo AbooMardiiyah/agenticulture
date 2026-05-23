@@ -1,18 +1,7 @@
-"""
-tests/test_endpoints.py — FastAPI endpoint tests for Task A and Task B.
-
-Uses TestClient — no real server, no LLM calls, no dataset needed.
-Run with:
-    uv run pytest tests/test_endpoints.py -v
-"""
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 
-
-# ---------------------------------------------------------------------------
-# Task A endpoints
-# ---------------------------------------------------------------------------
 
 class TestTaskAEndpoints:
     @pytest.fixture(autouse=True)
@@ -22,7 +11,7 @@ class TestTaskAEndpoints:
             from task_a.main import app, agent
             agent.llm = MagicMock(return_value="stars: 4.0\nreview: Really enjoyed this place!")
             agent.sentence_model = None
-            agent.interaction_tool = None   # force direct mode
+            agent.interaction_tool = None  
             self.client = TestClient(app)
             yield
 
@@ -99,18 +88,13 @@ class TestTaskAEndpoints:
     def test_generate_review_missing_product_id_422(self):
         r = self.client.post("/generate-review", json={
             "persona": "User",
-            "product_details": {"product_name": "Shoes"}  # missing product_id
+            "product_details": {"product_name": "Shoes"} 
         })
         assert r.status_code == 422
 
-    def test_generate_review_missing_product_details_422(self):
+    def test_generate_review_missing_product_details_returns_200(self):
         r = self.client.post("/generate-review", json={"persona": "User"})
-        assert r.status_code == 422
-
-
-# ---------------------------------------------------------------------------
-# Task B endpoints
-# ---------------------------------------------------------------------------
+        assert r.status_code == 200
 
 class TestTaskBEndpoints:
     @pytest.fixture(autouse=True)

@@ -15,10 +15,9 @@ Approach (ASC WWW'25 winning formula + enhancements):
 import json
 import logging
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.config import GLOBAL_MEAN_RATING
 from core.embeddings import get_embedding_model, cosine_retrieve
 from core.prompts import NIGERIAN_USER_MODELING_CONTEXT, REVIEW_OUTPUT_FORMAT
 from core.utils import (
@@ -313,8 +312,6 @@ PREDICTED RATING: {predicted:.1f} stars (from collaborative filtering)
     def _run_cf_mdilu(self, user_id: str, item_id: str, nigerian_context: bool) -> Dict[str, Any]:
         """CF + MDILU memory retrieval + single LLM call — no COTSC voting."""
         try:
-            result = self.workflow(user_id=user_id, item_id=item_id, nigerian_context=nigerian_context)
-
             if not self.interaction_tool:
                 return {"stars": 3.0, "review": "No interaction tool."}
             user_info    = self.interaction_tool.get_user(user_id=user_id)

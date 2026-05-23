@@ -1,10 +1,11 @@
-.PHONY: help up down logs health test eval-a eval-b
+.PHONY: help up down restart logs health test eval-a eval-b
 
 help:
 	@echo "AgentiCulture — available commands:"
 	@echo ""
 	@echo "  make up        Build and start both services (Task A :8001, Task B :8002)"
 	@echo "  make down      Stop and remove containers"
+	@echo "  make restart   Stop, rebuild, and restart both services"
 	@echo "  make logs      Follow logs from both services"
 	@echo "  make health    Check health of both running services"
 	@echo "  make test      Run unit tests"
@@ -18,6 +19,9 @@ up:
 
 down:
 	docker-compose down
+
+restart:
+	docker-compose down && docker-compose up --build
 
 logs:
 	docker-compose logs -f

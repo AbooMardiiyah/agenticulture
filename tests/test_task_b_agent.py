@@ -1,22 +1,10 @@
-"""
-tests/test_task_b_agent.py — Unit tests for task_b/agent.py
-
-Uses mock LLM and mock interaction tool — no API calls, no dataset needed.
-Run with:
-    uv run pytest tests/test_task_b_agent.py -v
-"""
-import pytest
 import numpy as np
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from task_b.agent import Baseline666RecHackersAgent, UserPreferenceCache, SessionState
 
 
 CANDIDATES = ["item_1", "item_2", "item_3", "item_4", "item_5"]
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 def make_mock_llm(response=None):
     default = str(["item_1", "item_2", "item_3", "item_4", "item_5"])
@@ -49,10 +37,6 @@ def make_agent(llm_response=None, user_reviews=None, items=None):
     return agent
 
 
-# ---------------------------------------------------------------------------
-# workflow() — output contract
-# ---------------------------------------------------------------------------
-
 class TestWorkflowOutputContract:
     def test_returns_list(self):
         agent = make_agent(user_reviews=[{"stars": 4, "text": "Good"}])
@@ -80,10 +64,6 @@ class TestWorkflowOutputContract:
         assert all(isinstance(i, str) for i in result)
 
 
-# ---------------------------------------------------------------------------
-# workflow() — cold-start path (no reviews)
-# ---------------------------------------------------------------------------
-
 class TestWorkflowColdStart:
     def test_cold_start_returns_all_candidates(self):
         agent = make_agent(user_reviews=[])
@@ -104,10 +84,6 @@ class TestWorkflowColdStart:
         result = agent.workflow(user_id="u1", candidate_list=CANDIDATES, persona="tech lover")
         assert set(result) == set(CANDIDATES)
 
-
-# ---------------------------------------------------------------------------
-# workflow() — error handling
-# ---------------------------------------------------------------------------
 
 class TestWorkflowErrorHandling:
     def test_empty_candidate_list_returns_empty(self):
@@ -143,10 +119,6 @@ class TestWorkflowErrorHandling:
         assert set(result) == set(CANDIDATES)
 
 
-# ---------------------------------------------------------------------------
-# _fill_missing()
-# ---------------------------------------------------------------------------
-
 class TestFillMissing:
     def setup_method(self):
         self.agent = Baseline666RecHackersAgent()
@@ -174,10 +146,6 @@ class TestFillMissing:
         result = self.agent._fill_missing([], CANDIDATES)
         assert set(result) == set(CANDIDATES)
 
-
-# ---------------------------------------------------------------------------
-# _blend_cross_domain()
-# ---------------------------------------------------------------------------
 
 class TestBlendCrossDomain:
     def setup_method(self):
@@ -208,10 +176,6 @@ class TestBlendCrossDomain:
         assert len(result) == len(set(result))
 
 
-# ---------------------------------------------------------------------------
-# UserPreferenceCache
-# ---------------------------------------------------------------------------
-
 class TestUserPreferenceCache:
     def _make_cache(self):
         mock_model = MagicMock()
@@ -234,7 +198,6 @@ class TestUserPreferenceCache:
         cache = self._make_cache()
         reviews = [{"text": f"Review {i}"} for i in range(5)]
         cache.update("u1", reviews, "amazon")
-        # Manually set domain count above threshold
         cache._cache["u1"]["domain_counts"]["amazon"] = 5
         vec = cache.get_preference_vec("u1", "amazon")
         assert vec is not None
@@ -247,10 +210,8 @@ class TestUserPreferenceCache:
         cache = self._make_cache()
         reviews = [{"text": "Review"}]
         cache.update("u1", reviews, "yelp")
-        # sparse: domain_count < COLD_START_THRESHOLD
         cache._cache["u1"]["domain_counts"]["yelp"] = 1
         vec = cache.get_preference_vec("u1", "yelp")
-        # Should return collective_vec not None
         assert vec is not None
 
     def test_multi_domain_update_all_tracked(self):
@@ -269,14 +230,10 @@ class TestUserPreferenceCache:
 
     def test_reviews_with_no_text_skipped(self):
         cache = self._make_cache()
-        reviews = [{"stars": 4}, {"stars": 3}]   # no "text" key
+        reviews = [{"stars": 4}, {"stars": 3}]   
         cache.update("u1", reviews, "yelp")
         assert "u1" not in cache._cache
 
-
-# ---------------------------------------------------------------------------
-# SessionState
-# ---------------------------------------------------------------------------
 
 class TestSessionState:
     def test_initial_state_empty(self):

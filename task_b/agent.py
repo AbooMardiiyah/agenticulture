@@ -1,30 +1,14 @@
-"""
-task_b/agent.py — Recommendation Agent
-
-All algorithm logic lives here. main.py only defines HTTP routes and
-imports this class. Shared utilities come from core/.
-
-Approach (baseline666 + RecHackers + sarvesh2003 adaptation):
-  1. Platform-aware feature extraction            [baseline666]
-  2. Self-consistency voting via Borda count      [RecHackers]
-  3. Composite per-domain preference embeddings   [sarvesh2003 adaptation]
-  4. Cold-start: persona-embedding cosine fallback [NEW — 25 pts]
-  5. Cross-domain: collective_vec transfer         [NEW — 25 pts]
-  6. Multi-turn session state                      [NEW]
-  7. Nigerian cultural context                     [bonus criterion]
-"""
 import ast
 import json
 import logging
 import time
-from collections import defaultdict
 from typing import Dict, List, Optional
 
 import numpy as np
 
 from core.config import COLD_START_THRESHOLD, PLATFORM_FEATURES
 from core.embeddings import get_embedding_model
-from core.prompts import NIGERIAN_RECOMMENDATION_CONTEXT, RANKING_OUTPUT_FORMAT
+from core.prompts import NIGERIAN_RECOMMENDATION_CONTEXT
 from core.utils import (
     detect_platform,
     select_informative_reviews,
@@ -33,10 +17,6 @@ from core.utils import (
 
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Composite preference cache  (sarvesh2003 concept, in-memory)
-# ---------------------------------------------------------------------------
 
 class UserPreferenceCache:
     """
@@ -51,7 +31,7 @@ class UserPreferenceCache:
     """
 
     def __init__(self, model):
-        self.model  = model
+        self.model = model
         self._cache: Dict[str, Dict] = {}
 
     def _init_entry(self, user_id: str) -> Dict:
@@ -73,7 +53,7 @@ class UserPreferenceCache:
         if not texts:
             return
         try:
-            embs       = self.model.encode(texts)
+            embs = self.model.encode(texts)
             domain_vec = np.mean(embs, axis=0)
 
             entry = self._cache.get(user_id) or self._init_entry(user_id)
@@ -116,7 +96,7 @@ class SessionState:
     def __init__(self):
         self.turns:      List[Dict]   = []
         self.platform:   Optional[str] = None
-        self.created_at: float        = time.time()
+        self.created_at: float = time.time()
 
     def record_turn(self, user_id: str, platform: str, result: List[str]) -> None:
         self.platform = platform
@@ -132,23 +112,19 @@ class SessionState:
         )
 
 
-# ---------------------------------------------------------------------------
-# Core agent
-# ---------------------------------------------------------------------------
-
 class Baseline666RecHackersAgent:
     """
     Combined:
-      · baseline666  — platform-aware feature extraction
-      · RecHackers   — 3 LLM samples + Borda count aggregation
-      · sarvesh2003  — composite embedding preference cache (adapted, in-memory)
-      · NEW          — cold-start, cross-domain boost, multi-turn sessions
+      · platform-aware feature extraction
+      · 3 LLM samples + Borda count aggregation
+      · composite embedding preference cache (adapted, in-memory)
+      · cold-start, cross-domain boost, multi-turn sessions
     """
 
     def __init__(self, llm=None):
-        self.llm              = llm
+        self.llm = llm
         self.interaction_tool = None
-        self.sentence_model   = get_embedding_model()
+        self.sentence_model = get_embedding_model()
         self.preference_cache = UserPreferenceCache(self.sentence_model) if self.sentence_model else None
         self.sessions: Dict[str, SessionState] = {}
         self.num_samples = 3
@@ -156,22 +132,14 @@ class Baseline666RecHackersAgent:
     def set_interaction_tool(self, tool):
         self.interaction_tool = tool
 
-    # ------------------------------------------------------------------
-    # Item feature extraction  (baseline666)
-    # ------------------------------------------------------------------
-
     def _extract_item_features(self, item: Dict, platform: str) -> Dict:
-        config    = PLATFORM_FEATURES.get(platform, PLATFORM_FEATURES["amazon"])
+        config = PLATFORM_FEATURES.get(platform, PLATFORM_FEATURES["amazon"])
         extracted = {"item_id": item.get("item_id", "")}
         for field in config["item_fields"]:
             val = item.get(field)
             if val is not None:
                 extracted[field] = str(val)[:200] if isinstance(val, str) else val
         return extracted
-
-    # ------------------------------------------------------------------
-    # Cold-start ranking  (25 pts)
-    # ------------------------------------------------------------------
 
     def _cold_start_rank(
         self,
@@ -187,7 +155,7 @@ class Baseline666RecHackersAgent:
         if not self.sentence_model:
             return candidate_list
         try:
-            from sklearn.metrics.pairwise import cosine_similarity
+            from core.embeddings import _cosine_similarity
             query = (persona_text or "") + " " + json.dumps(user_info, default=str)[:400]
             q_emb = self.sentence_model.encode([query.strip()])
 
@@ -199,22 +167,18 @@ class Baseline666RecHackersAgent:
                 texts.append(text or iid)
 
             i_embs = self.sentence_model.encode(texts)
-            sims   = cosine_similarity(q_emb, i_embs)[0]
+            sims = _cosine_similarity(np.asarray(q_emb), np.asarray(i_embs))[0]
             return [iid for iid, _ in sorted(zip(ids, sims), key=lambda x: x[1], reverse=True)]
         except Exception as exc:
             logger.warning(f"Cold-start rank failed: {exc}")
             return candidate_list
 
-    # ------------------------------------------------------------------
-    # Cross-domain preference boost
-    # ------------------------------------------------------------------
-
     def _cross_domain_scores(
         self,
-        user_id:        str,
-        platform:       str,
+        user_id: str,
+        platform: str,
         candidate_list: List[str],
-        item_features:  Dict[str, Dict],
+        item_features: Dict[str, Dict],
     ) -> Dict[str, float]:
         """Cosine similarity between user's collective_vec and each candidate."""
         if not self.preference_cache or not self.sentence_model:
@@ -223,7 +187,7 @@ class Baseline666RecHackersAgent:
         if pref_vec is None:
             return {}
         try:
-            from sklearn.metrics.pairwise import cosine_similarity
+            from core.embeddings import _cosine_similarity
             ids, texts = [], []
             for iid in candidate_list:
                 feat = item_features.get(iid, {"item_id": iid})
@@ -231,7 +195,7 @@ class Baseline666RecHackersAgent:
                 ids.append(iid)
                 texts.append(text or iid)
             i_embs = self.sentence_model.encode(texts)
-            sims   = cosine_similarity(pref_vec.reshape(1, -1), i_embs)[0]
+            sims = _cosine_similarity(np.asarray(pref_vec.reshape(1, -1)), np.asarray(i_embs))[0]
             return {iid: float(s) for iid, s in zip(ids, sims)}
         except Exception as exc:
             logger.warning(f"Cross-domain scores failed: {exc}")
@@ -249,8 +213,8 @@ class Baseline666RecHackersAgent:
         borda = {iid: (n - rank) for rank, iid in enumerate(borda_ranking)}
         if cross_scores:
             lo, hi = min(cross_scores.values()), max(cross_scores.values())
-            rng    = max(hi - lo, 1e-9)
-            norm   = {iid: (s - lo) / rng * n for iid, s in cross_scores.items()}
+            rng = max(hi - lo, 1e-9)
+            norm = {iid: (s - lo) / rng * n for iid, s in cross_scores.items()}
         else:
             norm = {}
         blended = {
@@ -258,10 +222,6 @@ class Baseline666RecHackersAgent:
             for iid in candidates
         }
         return sorted(candidates, key=lambda x: blended[x], reverse=True)
-
-    # ------------------------------------------------------------------
-    # LLM ranking — single sample  (RecHackers)
-    # ------------------------------------------------------------------
 
     def _llm_rank_single(self, prompt: str, temperature: float = 0.1) -> Optional[List[str]]:
         if not self.llm:
@@ -272,13 +232,12 @@ class Baseline666RecHackersAgent:
                 temperature=temperature,
                 max_tokens=800,
             )
-            import re, json
-            # Strip markdown code fences before parsing
+            import re
+            import json
             result = result.replace("```json", "").replace("```python", "").replace("```", "")
             match = re.search(r"\[.*?\]", result, re.DOTALL)
             if match:
                 raw = match.group(0)
-                # Try JSON first (double quotes), then Python literal (single quotes)
                 try:
                     return json.loads(raw)
                 except Exception:
@@ -286,10 +245,6 @@ class Baseline666RecHackersAgent:
         except Exception as exc:
             logger.warning(f"LLM rank sample failed: {exc}")
         return None
-
-    # ------------------------------------------------------------------
-    # Prompt
-    # ------------------------------------------------------------------
 
     def _build_ranking_prompt(
         self,
@@ -302,7 +257,6 @@ class Baseline666RecHackersAgent:
         candidate_list:      List[str] = None,
     ) -> str:
         cultural = NIGERIAN_RECOMMENDATION_CONTEXT if nigerian_context else ""
-        # Inject the actual candidate IDs so the model knows exactly what to return
         candidate_ids_str = json.dumps(candidate_list) if candidate_list else "[]"
         return f"""{cultural}{session_context}
 
@@ -327,10 +281,6 @@ Your final output should be ONLY a ranked list of these exact item IDs: {candida
 DO NOT output your analysis process!
 Follow this format STRICTLY: {candidate_ids_str}
 """
-
-    # ------------------------------------------------------------------
-    # Main workflow
-    # ------------------------------------------------------------------
 
     def workflow(
         self,
@@ -359,15 +309,12 @@ Follow this format STRICTLY: {candidate_ids_str}
             return candidate_list
 
         try:
-            # 1. Retrieve
-            user_info    = self.interaction_tool.get_user(user_id=user_id)
+            user_info = self.interaction_tool.get_user(user_id=user_id)
             user_reviews = self.interaction_tool.get_reviews(user_id=user_id) or []
 
-            # 2. Platform
             first_item = self.interaction_tool.get_item(item_id=candidate_list[0])
-            platform   = detect_platform(first_item)
+            platform = detect_platform(first_item)
 
-            # 3. Item features
             item_features: Dict[str, Dict] = {}
             item_feats_list: List[Dict]    = []
             for iid in candidate_list:
@@ -379,15 +326,12 @@ Follow this format STRICTLY: {candidate_ids_str}
                 item_features[iid] = feat
                 item_feats_list.append(feat)
 
-            # 4. Update preference cache
             if self.preference_cache and user_reviews:
                 self.preference_cache.update(user_id, user_reviews, platform)
 
-            # 5. Cold-start
-            is_cold   = len(user_reviews) == 0
+            is_cold = len(user_reviews) == 0
             is_sparse = 0 < len(user_reviews) < COLD_START_THRESHOLD
 
-            # ablation: cosine_only forces the cold-start path for all users
             if is_cold or ablation_mode == "cosine_only":
                 persona_text = persona or json.dumps(user_info, default=str)[:600]
                 result = self._cold_start_rank(candidate_list, persona_text, user_info, item_features)
@@ -395,18 +339,15 @@ Follow this format STRICTLY: {candidate_ids_str}
                     self.sessions.setdefault(session_id, SessionState()).record_turn(user_id, platform, result)
                 return self._fill_missing(result, candidate_list)
 
-            # 6. Cross-domain scores (skipped in borda_only ablation)
             cross_scores: Dict[str, float] = {}
             if is_sparse and ablation_mode not in ("single_llm", "borda_only"):
                 cross_scores = self._cross_domain_scores(user_id, platform, candidate_list, item_features)
 
-            # 7. Session context
             session_context = ""
             if session_id:
                 session_context = self.sessions.setdefault(session_id, SessionState()).context_hint()
 
-            # 8. Review text for prompt
-            sel_reviews      = select_informative_reviews(user_reviews, platform, max_reviews=5)
+            sel_reviews = select_informative_reviews(user_reviews, platform, max_reviews=5)
             user_reviews_txt = "".join(
                 f"\n- ({r.get('stars','?')} stars) {r.get('text','')[:180]}" for r in sel_reviews
             )
@@ -424,8 +365,6 @@ Follow this format STRICTLY: {candidate_ids_str}
                 candidate_list=candidate_list,
             )
 
-            # 9. Self-consistency voting
-            # ablation: single_llm uses only one sample; borda_only and full use 3
             n_samples = 1 if ablation_mode == "single_llm" else self.num_samples
             rankings: List[List[str]] = []
             for i in range(n_samples):
@@ -434,21 +373,17 @@ Follow this format STRICTLY: {candidate_ids_str}
                 if r and len(r) == len(candidate_list):
                     rankings.append(r)
 
-            # 10. Aggregate
             if rankings:
                 final = borda_count_aggregation(rankings, candidate_list)
                 if cross_scores and ablation_mode == "full":
                     final = self._blend_cross_domain(final, cross_scores, candidate_list)
             else:
-                # All LLM samples failed to parse — fall back to cosine ranking
-                # which is always valid and deterministic
                 logger.warning(f"All LLM samples failed for user {user_id}, falling back to cosine ranking")
                 persona_text = persona or json.dumps(user_info, default=str)[:600]
                 final = self._cold_start_rank(candidate_list, persona_text, user_info, item_features)
 
             final = self._fill_missing(final, candidate_list)
 
-            # 11. Record session
             if session_id:
                 self.sessions[session_id].record_turn(user_id, platform, final)
 

@@ -1,12 +1,7 @@
-"""
-task_b/main.py — FastAPI application for Task B (Recommendation).
-
-This file ONLY defines HTTP routes, request/response models, and startup.
-All agent logic lives in task_b/agent.py.
-All shared utilities live in core/.
-"""
 import logging
 import os
+import time
+import uvicorn
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -17,9 +12,6 @@ from task_b.agent import Baseline666RecHackersAgent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="AgentiCulture — Task B: Recommendation",
@@ -32,10 +24,6 @@ app = FastAPI(
 
 agent = Baseline666RecHackersAgent()
 
-
-# ---------------------------------------------------------------------------
-# Startup — lazy-init LLM and interaction tool
-# ---------------------------------------------------------------------------
 
 def _init_llm():
     if agent.llm:
@@ -52,7 +40,6 @@ def _init_llm():
         logger.info(f"LLM provider: {base_url or 'OpenAI'} | model: {model}")
 
         def llm_fn(messages, temperature=0.1, max_tokens=500, **_):
-            import time
             last_exc = None
             for attempt in range(5):
                 try:
@@ -87,43 +74,36 @@ def _init_interaction_tool():
             logger.warning(f"Interaction tool unavailable: {exc}")
 
 
-# ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
-
 class RecommendRequest(BaseModel):
-    # Direct mode (persona only, no dataset)
-    persona:  str           = Field(default="", description="User persona text")
-    context:  str           = Field(default="", description="Additional context (occasion, mood, etc.)")
-    category: Optional[str] = Field(default=None)
-    top_k:    int           = Field(default=10, ge=1, le=50)
+    # Direct mode fields
+    persona: str = Field(default="", description="User persona text — required for direct mode")
+    context: str = Field(default="", description="Additional context (occasion, mood, etc.) — direct mode only")
+    category: Optional[str] = Field(default=None, description="Item category filter — optional")
+    top_k: int = Field(default=10, ge=1, le=50, description="Number of items to return")
 
-    # Benchmark mode (user_id + candidate_list)
-    user_id:        Optional[str]       = Field(default=None)
-    candidate_list: Optional[List[str]] = Field(default=None)
+    # Benchmark mode fields
+    user_id:        Optional[str]       = Field(default=None, description="Required for benchmark mode — looks up user history from dataset")
+    candidate_list: Optional[List[str]] = Field(default=None, description="Required for both modes — list of item IDs to rank")
 
-    # Optional item metadata for direct mode — enables semantic ranking without a dataset.
-    # Each dict must contain "item_id" plus any descriptive fields (name, description, category, etc.)
+    # Optional item metadata for direct mode
     candidate_items: Optional[List[Dict[str, Any]]] = Field(
         default=None,
-        description="Item metadata for direct mode. Each entry must include 'item_id'.",
+        description="Item metadata for direct mode (optional). Each entry must include 'item_id' plus descriptive fields (name, description, category). Enables semantic ranking without a dataset.",
     )
 
-    nigerian_context: bool          = Field(default=True)
-    session_id:       Optional[str] = Field(default=None, description="Pass the same ID across turns for multi-turn context")
+    nigerian_context: bool = Field(default=True, description="Enable Nigerian cultural context in ranking")
+    session_id: Optional[str] = Field(default=None, description="Pass the same ID across turns for multi-turn session context")
 
 
 class RecommendResponse(BaseModel):
     recommendations: List[Dict[str, Any]]
-    reasoning:       str           = Field(default="")
-    cold_start:      bool          = Field(default=False)
-    session_turn:    int           = Field(default=1)
-    mode:            str           = Field(default="direct")
+    reasoning: str = Field(default="")
+    cold_start:  bool = Field(default=False)
+    session_turn: int = Field(default=1)
+    mode: str = Field(default="direct")
 
 
-# ---------------------------------------------------------------------------
 # Endpoints
-# ---------------------------------------------------------------------------
 
 @app.get("/")
 async def root():
@@ -168,11 +148,11 @@ async def recommend(request: RecommendRequest):
         # Benchmark mode
         if agent.interaction_tool and request.user_id and request.candidate_list:
             # Check cold-start flag for the response
-            is_cold   = False
-            turn_num  = 1
+            is_cold = False
+            turn_num = 1
             try:
-                reviews   = agent.interaction_tool.get_reviews(user_id=request.user_id) or []
-                is_cold   = len(reviews) == 0
+                reviews = agent.interaction_tool.get_reviews(user_id=request.user_id) or []
+                is_cold = len(reviews) == 0
             except Exception:
                 pass
 
@@ -242,5 +222,4 @@ async def recommend(request: RecommendRequest):
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8002)))

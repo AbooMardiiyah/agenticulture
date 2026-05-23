@@ -1,27 +1,4 @@
 #!/usr/bin/env python3
-"""
-eval_task_a.py — Run Task A (user modeling) evaluation.
-
-Usage:
-    uv run python eval_task_a.py --platform yelp --tasks 100
-    uv run python eval_task_a.py --platform all --tasks 100
-    uv run python eval_task_a.py --platform yelp --tasks 100 --ablation cf_only
-    uv run python eval_task_a.py --platform yelp --tasks 100 --no-nigerian
-
-Ablation modes:
-    full        Full system (default)
-    llm_direct  No CF, no MDILU, no COTSC — single LLM call only
-    cf_only     CF rating + single LLM call, no MDILU, no COTSC
-    cf_mdilu    CF + MDILU, no COTSC
-    cf_cotsc    CF + COTSC, no MDILU
-
-Metrics reported:
-    preference_estimation   1 - MAE/5 (framework default)
-    rmse                    sqrt(mean((pred_star - actual_star)^2))
-    review_generation       sentiment + emotion + topic cosine (framework default)
-    rouge1 / rougeL         n-gram overlap between generated and ground-truth review
-    overall_quality         (preference_estimation + review_generation) / 2
-"""
 
 import argparse
 import json
@@ -42,11 +19,6 @@ from task_a.agent import ASCUserModelingAgent
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# LLM wrapper
-# ---------------------------------------------------------------------------
 
 class OpenAICompatWrapper(LLMBase):
     def __init__(self, api_key: str, model: str, base_url: str = None):
@@ -79,11 +51,7 @@ class OpenAICompatWrapper(LLMBase):
 
     def get_embedding_model(self):
         return None
-
-
-# ---------------------------------------------------------------------------
-# Ablation-aware agent wrapper
-# ---------------------------------------------------------------------------
+    
 
 class TaskASimWrapper(SimulationAgent):
     """
@@ -134,10 +102,6 @@ class TaskASimWrapper(SimulationAgent):
 
         return {"stars": result.get("stars", 3.0), "review": result.get("review", "")}
 
-
-# ---------------------------------------------------------------------------
-# Extra metrics: RMSE and ROUGE
-# ---------------------------------------------------------------------------
 
 def compute_rmse(result_file: str, groundtruth_dir: str) -> float:
     """
@@ -200,10 +164,6 @@ def compute_rouge(result_file: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Extended simulator that saves raw outputs for post-processing
-# ---------------------------------------------------------------------------
-
 class ExtendedSimulator(Simulator):
     """
     Subclass that patches evaluate() to also save raw (output, groundtruth)
@@ -226,10 +186,6 @@ class ExtendedSimulator(Simulator):
         return base
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_context, output_path, args_workers=3, shared_simulator=None):
     base = os.path.join(
         os.path.dirname(__file__),
@@ -241,7 +197,6 @@ def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_conte
 
     if shared_simulator is not None:
         simulator = shared_simulator
-        # Reset outputs and tasks for the new platform
         simulator.simulation_outputs = []
         simulator.tasks = []
         simulator.groundtruth_data = []
@@ -255,8 +210,6 @@ def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_conte
     simulator.set_llm(llm)
     simulator.run_simulation(number_of_tasks=n_tasks, enable_threading=True, max_workers=args_workers)
 
-    # Save raw simulation outputs to disk immediately before evaluation
-    # so a crash during the evaluation phase does not lose the API calls.
     raw_path = output_path.replace(".json", "_raw.json")
     raw_outputs = []
     gt_data = simulator.groundtruth_data
@@ -273,7 +226,6 @@ def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_conte
 
     results = simulator.evaluate()
 
-    # Compute extra metrics
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
 
@@ -306,7 +258,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--platform",  choices=["yelp", "amazon", "goodreads", "all"], default="yelp")
     parser.add_argument("--tasks",     default="100", help="Number of tasks or 'all'")
-    parser.add_argument("--data_dir",  default="./data")
+    parser.add_argument("--data_dir",  default="./data/eval")
     parser.add_argument("--output",    default=None)
     parser.add_argument("--workers",   type=int, default=5)
     parser.add_argument("--model",     default=os.environ.get("LLM_MODEL", "gpt-4o-mini"))
@@ -331,8 +283,6 @@ def main():
     if not nigerian:
         suffix += "_no_culture"
 
-    # Create simulator once — loads emotion model (~953MB) only once
-    # and reuses it across all platforms
     logger.info("Loading evaluation models (once for all platforms)...")
     shared_sim = ExtendedSimulator(data_dir=args.data_dir, device="cpu", cache=False)
 
@@ -340,7 +290,7 @@ def main():
         logger.info(f"\n{'='*55}")
         logger.info(f"Platform: {platform} | Tasks: {args.tasks} | Ablation: {args.ablation}")
 
-        output = args.output or f"./results_task_a_{platform}{suffix}.json"
+        output = args.output or f"./eval_results/results_task_a_{platform}{suffix}.json"
         results = run_platform(
             platform=platform,
             n_tasks=n_tasks,

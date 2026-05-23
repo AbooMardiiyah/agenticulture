@@ -22,10 +22,8 @@ build/
 .ruff_cache/
 htmlcov/
 .coverage
+.pytest_cache/
 
-# Evaluation results (generated output, not source)
-results_task_a_*.json
-results_task_b_*.json
 
 # Evaluation framework example data (4700+ sample task/groundtruth files, not needed)
 evaluation/AgentSocietyChallenge/example/
@@ -43,8 +41,12 @@ CLAUDE.md
 AGENTS.md
 BCT*
 
-# PDFs (reference materials, not source)
+# Papers LaTeX source (submission PDFs in papers/ are tracked via !papers/*.pdf)
+papers/
+
+# PDFs (reference materials, not source — except papers/ which contains submission PDFs)
 *.pdf
+!papers/*.pdf
 
 # LaTeX build artifacts
 *.aux
@@ -67,3 +69,13 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Claude Code local settings
+.claude/
+
+# Stale root-level LaTeX file (papers live in papers/)
+main.tex
+
+# One-off scripts not part of submission
+run_ablations.sh
+filter_eval_data.py

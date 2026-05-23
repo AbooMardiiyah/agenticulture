@@ -11,7 +11,7 @@ Functions:
 import math
 import logging
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from core.config import PLATFORM_FEATURES, GLOBAL_MEAN_RATING
 

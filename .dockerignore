@@ -10,6 +10,9 @@ data/
 *.tar.gz
 *.jsonl.gz
 
+# PDFs
+*.pdf
+
 # Evaluation framework (not needed inside containers)
 evaluation/
 
@@ -29,6 +32,7 @@ dist/
 build/
 .mypy_cache/
 .ruff_cache/
+.pytest_cache/
 
 # Secrets
 .env
@@ -37,12 +41,28 @@ build/
 eval_task_a.py
 eval_task_b.py
 stream_data.py
+print_results.py
+eval_results/
+
+# Papers
+papers/
 
 # Docs & misc
 *.md
 SOLUTION_PAPER.md
 BEGINNER_GUIDE.md
 NIGERIAN_CONTEXT_STRATEGY.md
+
+# Project config files not needed at runtime
+pyproject.toml
+uv.lock
+run_ablations.sh
+filter_eval_data.py
+main.tex
+tests/
+
+# Claude Code local settings
+.claude/
 
 # OS & IDE
 .DS_Store

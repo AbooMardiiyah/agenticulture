@@ -1,25 +1,4 @@
 #!/usr/bin/env python3
-"""
-eval_task_b.py — Run Task B (recommendation) evaluation.
-
-Usage:
-    uv run python eval_task_b.py --platform yelp --tasks 100
-    uv run python eval_task_b.py --platform all --tasks 100
-    uv run python eval_task_b.py --platform yelp --tasks 100 --ablation cosine_only
-    uv run python eval_task_b.py --platform yelp --tasks 100 --no-nigerian
-
-Ablation modes:
-    full          Full system (default)
-    cosine_only   Embedding cosine similarity only — no LLM at all
-    single_llm    Single LLM call, no voting
-    borda_only    Borda voting, no cross-domain boost
-
-Metrics reported:
-    hr@1, hr@3, hr@5    Hit rate at K (framework default)
-    average_hit_rate    Mean of HR@1/3/5 (framework default)
-    ndcg@10             Normalised Discounted Cumulative Gain at 10
-"""
-
 import argparse
 import json
 import logging
@@ -41,10 +20,6 @@ from task_b.agent import Baseline666RecHackersAgent
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# LLM wrapper
-# ---------------------------------------------------------------------------
 
 class OpenAICompatWrapper(LLMBase):
     def __init__(self, api_key: str, model: str, base_url: str = None):
@@ -77,10 +52,6 @@ class OpenAICompatWrapper(LLMBase):
     def get_embedding_model(self):
         return None
 
-
-# ---------------------------------------------------------------------------
-# Ablation-aware agent wrapper
-# ---------------------------------------------------------------------------
 
 class TaskBSimWrapper(RecommendationAgent):
     """
@@ -123,10 +94,6 @@ class TaskBSimWrapper(RecommendationAgent):
         return result
 
 
-# ---------------------------------------------------------------------------
-# NDCG@K computation
-# ---------------------------------------------------------------------------
-
 def compute_ndcg(outputs: list, groundtruths: list, k: int = 10) -> float:
     """
     Compute mean NDCG@K across all tasks.
@@ -141,19 +108,15 @@ def compute_ndcg(outputs: list, groundtruths: list, k: int = 10) -> float:
     for gt_item, pred_list in zip(groundtruths, outputs):
         top_k = pred_list[:k]
         if gt_item in top_k:
-            rank = top_k.index(gt_item) + 1          # 1-indexed
-            dcg  = 1.0 / math.log2(rank + 1)         # relevance=1
-            idcg = 1.0 / math.log2(2)                 # best possible = rank 1
+            rank = top_k.index(gt_item) + 1         
+            dcg  = 1.0 / math.log2(rank + 1)         
+            idcg = 1.0 / math.log2(2)                 
             scores.append(dcg / idcg)
         else:
             scores.append(0.0)
 
     return round(sum(scores) / len(scores), 4) if scores else float("nan")
 
-
-# ---------------------------------------------------------------------------
-# Extended simulator that saves raw outputs for post-processing
-# ---------------------------------------------------------------------------
 
 class ExtendedSimulator(Simulator):
     def evaluate(self):
@@ -171,10 +134,6 @@ class ExtendedSimulator(Simulator):
         base["simulation_outputs"] = paired
         return base
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_context, output_path, args_workers=3, shared_simulator=None):
     base = os.path.join(
@@ -201,7 +160,6 @@ def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_conte
     simulator.set_llm(llm)
     simulator.run_simulation(number_of_tasks=n_tasks, enable_threading=True, max_workers=args_workers)
 
-    # Save raw outputs before evaluation so a crash does not lose API calls
     raw_path = output_path.replace(".json", "_raw.json")
     raw_outputs = []
     gt_data = simulator.groundtruth_data
@@ -218,7 +176,6 @@ def run_platform(platform, n_tasks, llm, data_dir, ablation_mode, nigerian_conte
 
     results = simulator.evaluate()
 
-    # Compute NDCG@10 from saved raw outputs
     gt_items   = [e["groundtruth"] for e in results.get("simulation_outputs", [])]
     pred_lists = [e["output"]      for e in results.get("simulation_outputs", [])]
     ndcg10     = compute_ndcg(pred_lists, gt_items, k=10)
@@ -236,7 +193,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--platform",  choices=["yelp", "amazon", "goodreads", "all"], default="yelp")
     parser.add_argument("--tasks",     default="100", help="Number of tasks or 'all'")
-    parser.add_argument("--data_dir",  default="./data")
+    parser.add_argument("--data_dir",  default="./data/eval")
     parser.add_argument("--output",    default=None)
     parser.add_argument("--workers",   type=int, default=5)
     parser.add_argument("--model",     default=os.environ.get("LLM_MODEL", "gpt-4o-mini"))
@@ -261,7 +218,6 @@ def main():
     if not nigerian:
         suffix += "_no_culture"
 
-    # Load evaluation models once — reused across all platforms
     logger.info("Loading evaluation models (once for all platforms)...")
     shared_sim = ExtendedSimulator(data_dir=args.data_dir, device="cpu", cache=False)
 
@@ -269,7 +225,7 @@ def main():
         logger.info(f"\n{'='*55}")
         logger.info(f"Platform: {platform} | Tasks: {args.tasks} | Ablation: {args.ablation}")
 
-        output = args.output or f"./results_task_b_{platform}{suffix}.json"
+        output = args.output or f"./eval_results/results_task_b_{platform}{suffix}.json"
         results = run_platform(
             platform=platform,
             n_tasks=n_tasks,

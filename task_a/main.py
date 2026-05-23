@@ -1,5 +1,7 @@
 import logging
 import os
+import time
+import uvicorn
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -21,22 +23,22 @@ app = FastAPI(
 
 agent = ASCUserModelingAgent()
 
+
 def _init_llm():
     if agent.llm:
         return
-    api_key  = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         logger.warning("No API key set — LLM calls will return stub responses.")
         return
     try:
         from openai import OpenAI
         base_url = os.environ.get("LLM_BASE_URL") or None
-        model    = os.environ.get("LLM_MODEL", "Qwen/Qwen2.5-72B-Instruct-Turbo")
-        client   = OpenAI(api_key=api_key, base_url=base_url)
+        model = os.environ.get("LLM_MODEL", "Qwen/Qwen2.5-72B-Instruct-Turbo")
+        client = OpenAI(api_key=api_key, base_url=base_url)
         logger.info(f"LLM provider: {base_url or 'OpenAI'} | model: {model}")
 
         def llm_fn(messages, temperature=0.1, max_tokens=1000, **_):
-            import time
             last_exc = None
             for attempt in range(5):
                 try:
@@ -72,30 +74,30 @@ def _init_interaction_tool():
 
 
 class ProductDetails(BaseModel):
-    product_id:   str           = Field(..., description="Unique product or item identifier")
-    product_name: str           = Field(default="")
+    product_id:  str = Field(..., description="Unique product or item identifier")
+    product_name: str = Field(default="")
     category:     Optional[str] = Field(default=None)
     description:  Optional[str] = Field(default=None)
 
 
 class ReviewRequest(BaseModel):
     # Direct mode (persona + product details, no dataset needed)
-    persona:         str           = Field(default="", description="User persona / profile text")
-    product_details: ProductDetails
+    persona:  str = Field(default="", description="User persona / profile text")
+    product_details: Optional[ProductDetails] = Field(default=None, description="Required for direct mode")
 
     # Benchmark mode (user_id + item_id → full pipeline via interaction tool)
-    user_id: Optional[str] = Field(default=None)
-    item_id: Optional[str] = Field(default=None)
+    user_id: Optional[str] = Field(default=None, description="Required for benchmark mode")
+    item_id: Optional[str] = Field(default=None, description="Required for benchmark mode")
 
     nigerian_context: bool = Field(default=True)
 
 
 class ReviewResponse(BaseModel):
-    stars:            float          = Field(..., description="Predicted star rating 1.0–5.0")
-    review:           str            = Field(..., description="Generated review text")
+    stars:            float = Field(..., description="Predicted star rating 1.0–5.0")
+    review:           str = Field(..., description="Generated review text")
     predicted_rating: Optional[float] = Field(default=None, description="CF-predicted rating before LLM")
-    cold_start:       bool           = Field(default=False)
-    mode:             str            = Field(default="direct")
+    cold_start:       bool = Field(default=False)
+    mode:             str = Field(default="direct")
 
 
 
@@ -149,11 +151,12 @@ async def generate_review(request: ReviewRequest):
                 mode="benchmark",
             )
 
+        pd = request.product_details or ProductDetails(product_id="unknown")
         result = agent.direct_generate(
             persona=request.persona,
-            product_name=request.product_details.product_name,
-            category=request.product_details.category or "general",
-            description=request.product_details.description or "",
+            product_name=pd.product_name,
+            category=pd.category or "general",
+            description=pd.description or "",
             nigerian_context=request.nigerian_context,
         )
         return ReviewResponse(stars=result["stars"], review=result["review"], mode="direct")
@@ -164,5 +167,4 @@ async def generate_review(request: ReviewRequest):
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8001)))

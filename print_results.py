@@ -48,7 +48,7 @@ def print_task_b_per_task(r, platform):
         pred_list = entry.get("output", [])
         gt        = entry.get("groundtruth", "")
         try:
-            rank = pred_list.index(gt) + 1  # 1-indexed
+            rank = pred_list.index(gt) + 1 
         except ValueError:
             rank = None
         h1 = "Y" if rank is not None and rank <= 1  else "-"

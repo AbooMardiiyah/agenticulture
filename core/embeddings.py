@@ -5,7 +5,7 @@ Both task_a and task_b call get_embedding_model() and get the same
 cached instance — no double download, no double memory usage.
 """
 import logging
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 
@@ -57,12 +57,25 @@ def cosine_retrieve(
         return []
 
     try:
-        from sklearn.metrics.pairwise import cosine_similarity
         q_emb   = model.encode(query_text)
         t_embs  = model.encode(texts)
-        sims    = cosine_similarity([q_emb], t_embs)[0]
+        sims    = _cosine_similarity(np.asarray([q_emb]), np.asarray(t_embs))[0]
         top_k   = sorted(range(len(sims)), key=lambda i: sims[i], reverse=True)[:k]
         return top_k
     except Exception as exc:
         logger.warning(f"cosine_retrieve failed: {exc}")
         return []
+
+
+def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """NumPy-only replacement for sklearn.metrics.pairwise.cosine_similarity."""
+    if a.ndim == 1:
+        a = a.reshape(1, -1)
+    if b.ndim == 1:
+        b = b.reshape(1, -1)
+    a_norm = np.linalg.norm(a, axis=1, keepdims=True)
+    b_norm = np.linalg.norm(b, axis=1, keepdims=True)
+    # Guard against zero-division on empty embeddings
+    a_norm = np.where(a_norm == 0, 1, a_norm)
+    b_norm = np.where(b_norm == 0, 1, b_norm)
+    return np.dot(a, b.T) / (a_norm * b_norm.T)

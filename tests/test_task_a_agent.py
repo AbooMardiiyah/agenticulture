@@ -1,18 +1,6 @@
-"""
-tests/test_task_a_agent.py — Unit tests for task_a/agent.py
-
-Uses a mock LLM and mock interaction tool — no API calls, no dataset needed.
-Run with:
-    uv run pytest tests/test_task_a_agent.py -v
-"""
-import pytest
 from unittest.mock import MagicMock, patch
 from task_a.agent import ASCUserModelingAgent
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 def make_mock_llm(response: str = "stars: 4.0\nreview: Great experience overall!"):
     """Returns a callable mock that simulates an LLM response."""
@@ -38,16 +26,12 @@ def make_agent(llm_response=None, user_reviews=None, item_reviews=None,
                user=None, item=None):
     """Convenience: build an agent with mock LLM + interaction tool."""
     agent = ASCUserModelingAgent(llm=make_mock_llm(llm_response or "stars: 4.0\nreview: Good."))
-    agent.sentence_model = None   # skip embedding model in unit tests
+    agent.sentence_model = None  
     agent.set_interaction_tool(
         make_mock_tool(user_reviews, item_reviews, user, item)
     )
     return agent
 
-
-# ---------------------------------------------------------------------------
-# workflow() — output contract
-# ---------------------------------------------------------------------------
 
 class TestWorkflowOutputContract:
     def test_returns_dict(self):
@@ -107,10 +91,6 @@ class TestWorkflowOutputContract:
         assert "predicted_rating" in result
 
 
-# ---------------------------------------------------------------------------
-# workflow() — error handling
-# ---------------------------------------------------------------------------
-
 class TestWorkflowErrorHandling:
     def test_no_interaction_tool_returns_stub(self):
         agent = ASCUserModelingAgent(llm=make_mock_llm())
@@ -143,10 +123,6 @@ class TestWorkflowErrorHandling:
         assert isinstance(result, dict)
         assert "stars" in result
 
-
-# ---------------------------------------------------------------------------
-# _cotsc_predict() — voting logic
-# ---------------------------------------------------------------------------
 
 class TestCOTSCPredict:
     def test_majority_vote_selects_most_common_rating(self):
@@ -187,10 +163,6 @@ class TestCOTSCPredict:
         assert (stars * 2) == round(stars * 2)
 
 
-# ---------------------------------------------------------------------------
-# direct_generate() — no dataset mode
-# ---------------------------------------------------------------------------
-
 class TestDirectGenerate:
     def test_returns_stars_and_review(self):
         agent = ASCUserModelingAgent(llm=make_mock_llm("stars: 4.0\nreview: Really good product."))
@@ -220,10 +192,6 @@ class TestDirectGenerate:
         assert result["stars"] == 2.0
 
 
-# ---------------------------------------------------------------------------
-# _mdilu_retrieve_similar() — with mock embedding model
-# ---------------------------------------------------------------------------
-
 class TestMDILURetrieve:
     def test_returns_k_reviews(self):
         import numpy as np
@@ -252,7 +220,6 @@ class TestMDILURetrieve:
     def test_returns_empty_when_no_reviews(self):
         agent = ASCUserModelingAgent()
         agent.sentence_model = MagicMock()
-        # cosine_retrieve returns [] for empty texts
         with patch("task_a.agent.cosine_retrieve", return_value=[]):
             result = agent._mdilu_retrieve_similar("query", [], k=3)
         assert result == []
