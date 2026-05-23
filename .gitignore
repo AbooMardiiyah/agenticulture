@@ -41,10 +41,13 @@ CLAUDE.md
 AGENTS.md
 BCT*
 
-# Papers LaTeX source (submission PDFs in papers/ are tracked via !papers/*.pdf)
-papers/
+# Papers LaTeX source (not needed in submission)
+papers/*.tex
+papers/*.sty
+papers/*.bst
+papers/*.bib
 
-# PDFs (reference materials, not source — except papers/ which contains submission PDFs)
+# PDFs (reference materials, not source — except submission papers)
 *.pdf
 !papers/*.pdf
 
