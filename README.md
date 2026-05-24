@@ -15,7 +15,7 @@ Two containerised API services that model how Nigerian users behave on review pl
 | **Port** | `8001` | `8002` |
 | **Key endpoint** | `POST /generate-review` | `POST /recommend` |
 
-Both services are culturally adapted to sound and reason like Nigerian users, which is an explicit bonus criterion in the brief.
+Both services are culturally adapted to sound and reason like Nigerian users.
 
 ---
 
@@ -23,7 +23,7 @@ Both services are culturally adapted to sound and reason like Nigerian users, wh
 
 ### Prerequisites
 - Python 3.11+
-- Docker Desktop (running, with WSL integration enabled)
+- Docker Desktop (running)
 - An LLM API key — Together AI (recommended), OpenAI, or any OpenAI-compatible provider
 
 ### 1. Clone and configure
@@ -178,8 +178,8 @@ agenticulture/
 ├── eval_results/             ← Pre-computed results (full runs + ablations)
 │
 ├── papers/                   ← Solution papers (LaTeX source + references)
-│   ├── track_a_paper.tex
-│   ├── track_b_paper.tex
+│   ├── track_a_user_modeling_tiamiyu.pdf
+│   ├── track_b_recommendation_tiamiyu.pdf
 │   └── references.bib
 │
 ├── Makefile                  ← Common commands
@@ -245,7 +245,8 @@ Load your `.env` first, then run:
 ```bash
 set -a && source .env && set +a
 
-# Task A — 2 tasks on Yelp
+
+# Task A — 2 tasks on Yelp (for quick test, you can use task 2 as increasing the tasks consumes api credits)
 uv run python eval_task_a.py --platform yelp --tasks 2 --data_dir ./data/eval --workers 1
 
 # Task B — 2 tasks on Yelp
@@ -257,7 +258,7 @@ To test a different platform, replace `yelp` with `amazon` or `goodreads`:
 uv run python eval_task_a.py --platform amazon --tasks 2 --data_dir ./data/eval --workers 1
 ```
 
-To run all three platforms at once (3 × 2 tasks):
+To run all three platforms at once for 2 tasks (3 × 2 tasks):
 ```bash
 uv run python eval_task_a.py --platform all --tasks 2 --data_dir ./data/eval --workers 1
 ```
@@ -322,7 +323,7 @@ This uses the AgentSociety Challenge evaluation framework — the same metrics a
 |---|-------------|----------|--------|
 | 1 | Task A containerised API | `task_a/` | Ready |
 | 2 | Task B containerised API | `task_b/` | Ready |
-| 3 | Solution papers (Track A + B) | `papers/track_a_paper.tex`, `papers/track_b_paper.tex` | Ready |
+| 3 | Solution papers (Track A + B) | `papers/track_a_user_modeling_tiamiyu.pdf`, `papers/track_b_recommendation_tiamiyu.pdf` | Ready |
 | 4 | Code repository | This repo | Ready |
 
 ---
